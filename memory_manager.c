@@ -19,17 +19,19 @@ struct metadata{
 Initializes the memory manager with a specified size of memory pool. The memory pool could be any data structure, for instance, a large array or a similar contuguous block of memory. (You do not have to interact directly with the hardware or the operating system’s memory management functions).
 */
 void mem_init(size_t size){
-
+    printf("Initializing the memory %ld \n", size);
 
     if ((memory_pool = malloc(size)) == NULL){
         return;
     }
 
     struct metadata *init_block = (struct metadata*) memory_pool;
-
+    printf("Adding the start struct to the memory-pool at address %s \n", init_block);
     init_block->free = 1;
     init_block->size_of_block = size - sizeof(struct metadata);
     init_block->pos_next_block = NULL;
+    printf("With the size of %ld \n", size - sizeof(struct metadata));
+
 
     
 
@@ -46,24 +48,27 @@ Allocates a block of memory of the specified size. Find a suitable block in the 
 void* mem_alloc(size_t size){
 
     struct metadata* current_block = (struct metadata*) memory_pool;
-    int block_found = 0;
     void* user_data = NULL;
-    while(){
+    while(current_block != NULL){
         
 
         if (current_block->free == 1 && current_block->size_of_block >= size){
-            block_found = 1;
             current_block->free = 0;
             user_data = (void*)(current_block+1);
+
+            char* next_block_address = (char*)(current_block+1)+size;
+            struct metadata* new_block = (struct metadata*) next_block_address;
+            new_block->free = 1;
+            new_block->size_of_block = current_block->size_of_block - size - sizeof(struct metadata);
+            return user_data;
     }
 
 
     current_block = current_block->pos_next_block;
 
     }
-    return user_data;
-    
 
+    return NULL;
 }
 
 
