@@ -13,7 +13,12 @@ void* mem_alloc(size_t size);
 void mem_free(void* block);
 void* mem_resize(void* block, size_t size);
 void mem_deinit();
-
-
+void print_all_block();
+struct metadata {
+    size_t size_of_block;
+    int free;
+    struct metadata* pos_next_block;
+    int id;
+};
 
 #endif
