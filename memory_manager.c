@@ -6,6 +6,15 @@
 char * memory_pool = NULL; //global memory pool
 
 int counter = 1;
+
+
+int getUniqueId(){
+    int retval = counter;
+    counter++;
+
+    return retval;
+}
+
 /*
 Initializes the memory manager with a specified size of memory pool. The memory pool could be any data structure, for instance, a large array or a similar contuguous block of memory. (You do not have to interact directly with the hardware or the operating system’s memory management functions).
 */
@@ -24,14 +33,26 @@ void mem_init(size_t size){
     init_block->size_of_block = size - sizeof(struct metadata);
     init_block->pos_next_block = NULL;
 
-
-    init_block->id = counter;
-    counter++;
+    init_block->id = getUniqueId();
+    
     printf("Adding the start struct to the memory-pool at address %p, with the size of %ld \n", (void*)init_block,size - sizeof(struct metadata));
 
 }
 
+struct metadata* findNextFreeBlock(struct metadata* block, size_t size){
+    struct metadata* currentBlock = block->pos_next_block; //the block to work from
 
+    while (currentBlock != NULL){
+        if(currentBlock->free == 1 && currentBlock->size_of_block>= size){
+            return currentBlock;
+
+        }
+        else{
+            currentBlock = currentBlock->pos_next_block;
+        }
+    }
+    return NULL;
+}
 
 /* 
 Allocates a block of memory of the specified size. Find a suitable block in the pool, mark it as allocated, and return the pointer to the start of the allocated block.
@@ -43,8 +64,6 @@ void* mem_alloc(size_t size){
 
     void* userData = NULL;
     while(current_block != NULL){
-        
-
         if (current_block->free == 1 && current_block->size_of_block >= size){
             current_block->free = 0;
             userData = (void*)(current_block+1); //Set the user data to the first address after the meta data. 
@@ -104,9 +123,33 @@ Frees the specified block of memory. For allocation and deallocation, you need a
 void* mem_resize(void* block, size_t size){
 /*
 Changes the size of the memory block, possibly moving it.
-
 */
+    //if the new size is smaller then the current block: Shrink the memory, add a new block to fill the gap
+    
 
+    struct metadata* blockToResize = ((struct metadata*) block)-1;
+    size_t original_size = blockToResize->size_of_block;
+
+    if(original_size>= size+sizeof(struct metadata)){
+        struct metadata* oldNextBlock = blockToResize->pos_next_block; //get the "next" block of the blocket in question. Needed to complete the chain of references
+        blockToResize->size_of_block = size; //Set the size of the block in question to the new specified size
+        char* next_block_address = (char*)(blockToResize+1)+size; //get the address of the next metadata struct. This is after the userData
+        struct metadata* new_block = (struct metadata*) next_block_address; //add a new block to in the gap-space created by the resizing
+        blockToResize->pos_next_block = new_block; //set the "next block" of the block in question to the new block. 
+        new_block->size_of_block = original_size-size-sizeof(struct metadata); //Set the size of the new
+        new_block->free = 1; //Set the new block as free
+        new_block->pos_next_block = oldNextBlock; //set the next-block of the new block to the original next block. Completes the chain of "next-block"
+        new_block->id = getUniqueId();
+
+        //If the new size is larger than the current size
+
+        return blockToResize+1;
+    }else{
+        
+    }
+
+
+    
 }
 
 

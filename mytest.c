@@ -12,10 +12,10 @@ int main(void){
     printf("Allocating 100 \n");
     void* p2 = mem_alloc(100);
     print_all_block();
-    printf("Deallocating \n");
-    mem_free(p1);
-
+    printf("Rezising block 1 \n");
+    mem_resize(p1, 50);
     print_all_block();
+    
     
     return 0;
 }
