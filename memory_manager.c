@@ -39,8 +39,8 @@ void mem_init(size_t size){
 
 }
 
-struct metadata* findNextFreeBlock(struct metadata* block, size_t size){
-    struct metadata* currentBlock = block->pos_next_block; //the block to work from
+struct metadata* findFreeBlock(struct metadata* block, size_t size){
+    struct metadata* currentBlock = block; //the block to work from
 
     while (currentBlock != NULL){
         if(currentBlock->free == 1 && currentBlock->size_of_block>= size){
@@ -57,36 +57,37 @@ struct metadata* findNextFreeBlock(struct metadata* block, size_t size){
 /* 
 Allocates a block of memory of the specified size. Find a suitable block in the pool, mark it as allocated, and return the pointer to the start of the allocated block.
 */
+
 void* mem_alloc(size_t size){
+    struct metadata* current_block = (struct metadata*) memory_pool;
+    struct metadata* freeBlock = findFreeBlock(current_block, size);
+    if (freeBlock == NULL)
+        return NULL;
 
-    // printf("Adding a new block to the memory \n");
-    struct metadata* current_block = (struct metadata*) memory_pool; //pointer to the start of the allocated memory. casted as a struct
+    if(freeBlock->size_of_block >= size+sizeof(struct metadata)+1){ //split the free block
+        struct metadata* oldNextBlock = freeBlock->pos_next_block;
+        size_t storeSize = freeBlock->size_of_block;
+        freeBlock->free = 0;
+        freeBlock->size_of_block = size;
+        void* userSpace = (void*)(freeBlock+1);
+        char* nextBlockAddress = (char*)(freeBlock+1)+size;
+        struct metadata* newBlock = (struct metadata*) nextBlockAddress;
+        freeBlock->pos_next_block = newBlock;
+        newBlock->free = 1;
+        newBlock->pos_next_block = oldNextBlock;
+        newBlock->size_of_block = storeSize-size-sizeof(struct metadata);
+        newBlock->id = getUniqueId();
 
-    void* userData = NULL;
-    while(current_block != NULL){
-        if (current_block->free == 1 && current_block->size_of_block >= size){
-            current_block->free = 0;
-            userData = (void*)(current_block+1); //Set the user data to the first address after the meta data. 
-
-            char* next_block_address = (char*)(current_block+1)+size; //get the address of the next metadata struct. This is after the userData
-            struct metadata* new_block = (struct metadata*) next_block_address; //add the new block to the allocated memory
-            current_block->pos_next_block = new_block; //add the new block as the "next block" of the current block
-            
-            new_block->id = counter; 
-            counter++;
-            new_block->free = 1; //Set the new block as free
-
-            new_block->size_of_block = current_block->size_of_block - size - sizeof(struct metadata); //Set the new block size
-            current_block->size_of_block = size; //Set the size of the current block to size
-            return userData; //Return a pointer to the userData space. 
+        return userSpace;
     }
-
-
-    current_block = current_block->pos_next_block; //get next block
-
+    else{ //Use the entire free block
+        freeBlock->free = 0;
+        void* userSpace = (void*)(freeBlock+1);
+        return userSpace;
     }
 
     return NULL;
+    
 }
 
 
@@ -124,32 +125,46 @@ void* mem_resize(void* block, size_t size){
 /*
 Changes the size of the memory block, possibly moving it.
 */
-    //if the new size is smaller then the current block: Shrink the memory, add a new block to fill the gap
-    
-
     struct metadata* blockToResize = ((struct metadata*) block)-1;
-    size_t original_size = blockToResize->size_of_block;
 
-    if(original_size>= size+sizeof(struct metadata)){
-        struct metadata* oldNextBlock = blockToResize->pos_next_block; //get the "next" block of the blocket in question. Needed to complete the chain of references
-        blockToResize->size_of_block = size; //Set the size of the block in question to the new specified size
-        char* next_block_address = (char*)(blockToResize+1)+size; //get the address of the next metadata struct. This is after the userData
-        struct metadata* new_block = (struct metadata*) next_block_address; //add a new block to in the gap-space created by the resizing
-        blockToResize->pos_next_block = new_block; //set the "next block" of the block in question to the new block. 
-        new_block->size_of_block = original_size-size-sizeof(struct metadata); //Set the size of the new
-        new_block->free = 1; //Set the new block as free
-        new_block->pos_next_block = oldNextBlock; //set the next-block of the new block to the original next block. Completes the chain of "next-block"
-        new_block->id = getUniqueId();
+    if(blockToResize->size_of_block > size){ //shrink (split and create new block)
 
-        //If the new size is larger than the current size
+        size_t originalSize = blockToResize->size_of_block;
+        struct metadata* originalNextBlock = blockToResize->pos_next_block;
 
-        return blockToResize+1;
-    }else{
-        
+        blockToResize->size_of_block = size;
+        char* fillBlockAdress = (char*)(blockToResize+1)+size;
+        struct metadata* fillBlock = (struct metadata*) fillBlockAdress;
+        blockToResize->pos_next_block = fillBlock;
+        fillBlock->free = 1;
+        fillBlock->pos_next_block = originalNextBlock;
+        fillBlock->size_of_block = originalSize-size-sizeof(struct metadata);
+        fillBlock->id = getUniqueId();
+        return blockToResize + 1;
     }
 
+    else{ //grow, allocate more space. 
 
-    
+        //Kolla om föregåenge block är stort nog, eller om nästa block är stort nog.
+        // Om inte, skapa ett nytt block, kopiera över. 
+
+        struct metadata* nextBlock = blockToResize->pos_next_block;
+
+        if( //use the next block
+            nextBlock != NULL && 
+            nextBlock->free && 
+            nextBlock->size_of_block + blockToResize->size_of_block + sizeof(struct metadata) >= size){
+            
+
+        }
+        else{//use a new block via mem_alloc
+
+
+        }
+        
+
+
+    }    
 }
 
 

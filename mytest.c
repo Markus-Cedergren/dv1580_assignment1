@@ -12,7 +12,7 @@ int main(void){
     printf("Allocating 100 \n");
     void* p2 = mem_alloc(100);
     print_all_block();
-    printf("Rezising block 1 \n");
+    printf("Rezising block 1, to 50 \n");
     mem_resize(p1, 50);
     print_all_block();
     
