@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "*.yy": "lex",
-        "memory_manager.h": "c"
+        "memory_manager.h": "c",
+        "stdint.h": "c"
     }
 }
