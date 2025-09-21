@@ -162,7 +162,7 @@ Changes the size of the memory block, possibly moving it.
                     struct metadata* nextBlockNext = nextBlock->pos_next_block;
 
                     blockToResize->size_of_block = size;
-                    size_t gapSpace = blockToResizeSize + nextBlockSize + sizeof(struct metadata) - size;
+                    size_t gapSpace = blockToResizeSize + nextBlockSize - size - sizeof(struct metadata);
 
                     char* fillBlockAdress = (char*)(blockToResize+1)+blockToResize->size_of_block;
                     struct metadata* fillBlock = (struct metadata*)fillBlockAdress;
@@ -177,12 +177,21 @@ Changes the size of the memory block, possibly moving it.
 
                 }else{ //If no gap i created, only merge blocks
 
+                    blockToResize->size_of_block = blockToResize->size_of_block + nextBlock->size_of_block + sizeof(struct metadata);
+                    blockToResize->pos_next_block = nextBlock->pos_next_block;
+                    return blockToResize+1;
+
                 }
 
 
         }
         else{//use a new block via mem_alloc
 
+            void* newBlock = mem_alloc(size);
+            size_t byteToCopy = blockToResize->size_of_block;
+            memcpy(newBlock, block,byteToCopy);
+            blockToResize->free=1;
+            return newBlock;
 
         }
         
