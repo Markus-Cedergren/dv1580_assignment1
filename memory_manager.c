@@ -8,7 +8,7 @@ char * memory_pool = NULL; //global memory pool
 int counter = 1;
 int numberOfBlocks = 0;
 
-struct metadata blocks[1024];
+struct metadata *blocks = NULL;
 
 
 int getUniqueId(){
@@ -26,16 +26,20 @@ void mem_init(size_t size){
         return;
     }
 
+    numberOfBlocks = 1;
+    blocks = realloc(NULL, numberOfBlocks*sizeof(struct metadata));
     blocks[0].free=1;
     blocks[0].id = getUniqueId();
     blocks[0].offset = 0;
     blocks[0].size_of_block = size;
-    numberOfBlocks = 1;
+    
 }
 
 
 void shiftright(int fromIndex){ //shift block from specified position one index to the right.
-    for(int index = numberOfBlocks; index > fromIndex; index--){
+    numberOfBlocks++;
+    blocks = realloc(blocks, numberOfBlocks*sizeof(struct metadata));
+    for(int index = numberOfBlocks-1; index >= fromIndex; index--){
         blocks[index] = blocks[index-1];
     }
 }
@@ -44,6 +48,9 @@ void shiftleft(int fromIndex){
     for (int index = fromIndex; index<numberOfBlocks; index++){
         blocks[index] = blocks[index+1];
     }
+
+    numberOfBlocks--;
+    blocks = realloc(blocks, numberOfBlocks*sizeof(struct metadata));
 }
 
 
@@ -69,7 +76,6 @@ void* mem_alloc(size_t size){
 
                 blocks[index].free = 0;
                 blocks[index].size_of_block = size;
-                numberOfBlocks++;
                 
                 return blocks[index].offset + memory_pool;
             }
@@ -90,12 +96,10 @@ void mem_free(void* block){
         if(blocks[index].offset == offsetToFind){
             blocks[index].free = 1;
         
-        if(blocks[index-1].free == 1 && blocks[index+1].free == 1 && index < numberOfBlocks && index > 0){ //merge blocks.
+        if(index < numberOfBlocks-1 && index > 0 && blocks[index-1].free == 1 && blocks[index+1].free == 1){ //merge blocks.
             blocks[index-1].size_of_block = blocks[index].size_of_block + blocks[index+1].size_of_block + blocks[index-1].size_of_block;
             shiftleft(index);
             shiftleft(index);
-            --numberOfBlocks;
-            --numberOfBlocks;
 
         }
 
@@ -120,7 +124,6 @@ void* mem_resize(void* block, size_t size){
                 blocks[index+1].offset = blocks[index].offset+size;
 
                 blocks[index].size_of_block = size;
-                numberOfBlocks++;
 
                 return block;
                 }    
@@ -178,5 +181,6 @@ Frees up the memory pool that was initially allocated by the mem_init function, 
 */
 
 free(memory_pool);
+free(blocks);
 
 }
