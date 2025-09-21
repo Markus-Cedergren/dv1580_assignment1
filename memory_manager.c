@@ -6,6 +6,9 @@
 char * memory_pool = NULL; //global memory pool
 
 int counter = 1;
+int numberOfBlocks = 0;
+
+struct metadata blocks[1024];
 
 
 int getUniqueId(){
@@ -19,187 +22,155 @@ int getUniqueId(){
 Initializes the memory manager with a specified size of memory pool. The memory pool could be any data structure, for instance, a large array or a similar contuguous block of memory. (You do not have to interact directly with the hardware or the operating system’s memory management functions).
 */
 void mem_init(size_t size){
-    printf("Initializing the memory %ld \n", size);
-
     if ((memory_pool = malloc(size)) == NULL){
         return;
     }
 
-    struct metadata *init_block = (struct metadata*) memory_pool;
-    //Memory pool innehåller addressen till första "sloten" i minnesblocket som allokerats.
-    //init_block innehåller addressen till första "sloten" i minnesblocket som allokerats.
-    
-    init_block->free = 1;
-    init_block->size_of_block = size - sizeof(struct metadata);
-    init_block->pos_next_block = NULL;
-
-    init_block->id = getUniqueId();
-    
-    printf("Adding the start struct to the memory-pool at address %p, with the size of %ld \n", (void*)init_block,size - sizeof(struct metadata));
-
+    blocks[0].free=1;
+    blocks[0].id = getUniqueId();
+    blocks[0].offset = 0;
+    blocks[0].size_of_block = size;
+    numberOfBlocks = 1;
 }
 
-struct metadata* findFreeBlock(struct metadata* block, size_t size){
-    struct metadata* currentBlock = block; //the block to work from
 
-    while (currentBlock != NULL){
-        if(currentBlock->free == 1 && currentBlock->size_of_block>= size){
-            return currentBlock;
-
-        }
-        else{
-            currentBlock = currentBlock->pos_next_block;
-        }
+void shiftright(int fromIndex){ //shift block from specified position one index to the right.
+    for(int index = numberOfBlocks; index > fromIndex; index--){
+        blocks[index] = blocks[index-1];
     }
-    return NULL;
 }
 
-/* 
-Allocates a block of memory of the specified size. Find a suitable block in the pool, mark it as allocated, and return the pointer to the start of the allocated block.
-*/
+void shiftleft(int fromIndex){
+    for (int index = fromIndex; index<numberOfBlocks; index++){
+        blocks[index] = blocks[index+1];
+    }
+}
+
 
 void* mem_alloc(size_t size){
-    struct metadata* current_block = (struct metadata*) memory_pool;
-    struct metadata* freeBlock = findFreeBlock(current_block, size);
-    if (freeBlock == NULL)
-        return NULL;
+    for (int index = 0; index < numberOfBlocks; index++){
 
-    if(freeBlock->size_of_block >= size+sizeof(struct metadata)+1){ //split the free block
-        struct metadata* oldNextBlock = freeBlock->pos_next_block;
-        size_t storeSize = freeBlock->size_of_block;
-        freeBlock->free = 0;
-        freeBlock->size_of_block = size;
-        void* userSpace = (void*)(freeBlock+1);
-        char* nextBlockAddress = (char*)(freeBlock+1)+size;
-        struct metadata* newBlock = (struct metadata*) nextBlockAddress;
-        freeBlock->pos_next_block = newBlock;
-        newBlock->free = 1;
-        newBlock->pos_next_block = oldNextBlock;
-        newBlock->size_of_block = storeSize-size-sizeof(struct metadata);
-        newBlock->id = getUniqueId();
+        if (blocks[index].free == 1 && blocks[index].size_of_block >= size){
+            
+            
+            if(blocks[index].size_of_block == size){ //case where the free block is exactly the required size.
+                blocks[index].free = 0;
+                return memory_pool + blocks[index].offset;
+            }
 
-        return userSpace;
+            else if(blocks[index].size_of_block > size){ //the case where there will be additionall memory left
+
+
+                shiftright(index+1);
+                blocks[index+1].id = getUniqueId();
+                blocks[index+1].offset =  blocks[index].offset + size;
+                blocks[index+1].size_of_block = blocks[index].size_of_block - size;
+                blocks[index+1].free =1;
+
+                blocks[index].free = 0;
+                blocks[index].size_of_block = size;
+                numberOfBlocks++;
+                
+                return blocks[index].offset + memory_pool;
+            }
+        }
     }
-    else{ //Use the entire free block
-        freeBlock->free = 0;
-        void* userSpace = (void*)(freeBlock+1);
-        return userSpace;
-    }
-
     return NULL;
-    
 }
 
-
-
-void print_all_block(){
-    struct metadata* currentBlock = (struct metadata*) memory_pool;
-
-    while (currentBlock != NULL){
-        int blockID = currentBlock->id;
-
-        printf("Current Block is: %d  and have the size: %ld, and have taken-status: %d\n", blockID, currentBlock->size_of_block, currentBlock->free);
-
-        currentBlock = currentBlock->pos_next_block;
-    }
-
-    
-}
 
 
 
 
 void mem_free(void* block){
-/* 
-Frees the specified block of memory. For allocation and deallocation, you need a way to track which parts of the memory pool are free and which are allocated.
-*/
 
-    struct metadata* blockToFree = ((struct metadata*) block)-1; //Need to do -1 since the user have the adress to the userSpace. Want to modify the struct
-    blockToFree->free = 1;
+    size_t offsetToFind = (size_t)((char*)block - memory_pool);
 
+    for(int index = 0; index < numberOfBlocks; index++){
+        if(blocks[index].offset == offsetToFind){
+            blocks[index].free = 1;
+        
+        if(blocks[index-1].free == 1 && blocks[index+1].free == 1 && index < numberOfBlocks && index > 0){ //merge blocks.
+            blocks[index-1].size_of_block = blocks[index].size_of_block + blocks[index+1].size_of_block + blocks[index-1].size_of_block;
+            shiftleft(index);
+            shiftleft(index);
+            --numberOfBlocks;
+            --numberOfBlocks;
+
+        }
+
+        }
+    }
 }
-
 
 
 void* mem_resize(void* block, size_t size){
-/*
-Changes the size of the memory block, possibly moving it.
-*/
-    struct metadata* blockToResize = ((struct metadata*) block)-1;
 
-    if(blockToResize->size_of_block > size){ //shrink (split and create new block)
+    size_t offsetToFind = (size_t)((char*) block-memory_pool);
 
-        size_t originalSize = blockToResize->size_of_block;
-        struct metadata* originalNextBlock = blockToResize->pos_next_block;
+    for(int index = 0; index < numberOfBlocks; index++){
+        if(blocks[index].offset == offsetToFind){
 
-        blockToResize->size_of_block = size;
-        char* fillBlockAdress = (char*)(blockToResize+1)+size;
-        struct metadata* fillBlock = (struct metadata*) fillBlockAdress;
-        blockToResize->pos_next_block = fillBlock;
-        fillBlock->free = 1;
-        fillBlock->pos_next_block = originalNextBlock;
-        fillBlock->size_of_block = originalSize-size-sizeof(struct metadata);
-        fillBlock->id = getUniqueId();
-        return blockToResize + 1;
-    }
+            if(blocks[index].size_of_block >= size){ // shrink case.
+                if(blocks[index].size_of_block >= size+1){ //need a new block to fill the space
+                shiftright(index+1);             
+                blocks[index+1].size_of_block = blocks[index].size_of_block - size;
+                blocks[index+1].free = 1;
+                blocks[index+1].id = getUniqueId();
+                blocks[index+1].offset = blocks[index].offset+size;
 
-    else{ //grow, allocate more space. 
+                blocks[index].size_of_block = size;
+                numberOfBlocks++;
 
-        //Kolla om föregåenge block är stort nog, eller om nästa block är stort nog.
-        // Om inte, skapa ett nytt block, kopiera över. 
+                return block;
+                }    
+                else{ //handles edge case where resizing to the original size. 
+                    return block;
+                }
+            }else{ //handles the case when block should grow. 
 
-        struct metadata* nextBlock = blockToResize->pos_next_block;
+                if(blocks[index+1].free == 1 && blocks[index].size_of_block + blocks[index+1].size_of_block >= size){ //Grow into the free next block
 
-        if( //use the next block
-            nextBlock != NULL && 
-            nextBlock->free && 
-            nextBlock->size_of_block + blockToResize->size_of_block + sizeof(struct metadata) >= size){
-            
-                if(blockToResize->size_of_block + nextBlock->size_of_block + sizeof(struct metadata) >= size + sizeof(struct metadata) + 1){ // merge two blocks, create one additionall block to fill grap
+                    if(blocks[index].size_of_block + blocks[index+1].size_of_block == size){ //perfect fit
 
-                    size_t blockToResizeSize = blockToResize->size_of_block;
-                    size_t nextBlockSize = nextBlock->size_of_block;
-                    struct metadata* nextBlockNext = nextBlock->pos_next_block;
 
-                    blockToResize->size_of_block = size;
-                    size_t gapSpace = blockToResizeSize + nextBlockSize - size - sizeof(struct metadata);
+                        blocks[index+1].free = 0;
+                        
+                        blocks[index].size_of_block = blocks[index].size_of_block + blocks[index+1].size_of_block;
+                        shiftleft(index+1);
+                        numberOfBlocks--;
+                        return block;
 
-                    char* fillBlockAdress = (char*)(blockToResize+1)+blockToResize->size_of_block;
-                    struct metadata* fillBlock = (struct metadata*)fillBlockAdress;
-                    fillBlock->free = 1;
-                    fillBlock->size_of_block = gapSpace;
+                    }
+                    else{ //create a new block to fill the size-gap after merging.
+                        
+                        blocks[index+1].size_of_block = blocks[index].size_of_block + blocks[index+1].size_of_block-size;
+                        blocks[index+1].offset = blocks[index].offset + size;
+                        blocks[index+1].free = 1;
+                        blocks[index+1].id = getUniqueId();
+                        blocks[index].size_of_block = size;
+                        return block;
 
-                    blockToResize->pos_next_block = fillBlock;
-                    fillBlock->pos_next_block = nextBlockNext;
-                    fillBlock->id = getUniqueId();
-
-                    return blockToResize+1;
-
-                }else{ //If no gap i created, only merge blocks
-
-                    blockToResize->size_of_block = blockToResize->size_of_block + nextBlock->size_of_block + sizeof(struct metadata);
-                    blockToResize->pos_next_block = nextBlock->pos_next_block;
-                    return blockToResize+1;
+                    }
 
                 }
+                else{ //The case where a new block and copy is required.
 
+
+                    void* newBlock = mem_alloc(size);
+
+                    memcpy(newBlock, blocks[index].offset + memory_pool, blocks[index].size_of_block);
+                    blocks[index].free = 1;
+                    return newBlock;
+
+                }
+            }
 
         }
-        else{//use a new block via mem_alloc
 
-            void* newBlock = mem_alloc(size);
-            size_t byteToCopy = blockToResize->size_of_block;
-            memcpy(newBlock, block,byteToCopy);
-            blockToResize->free=1;
-            return newBlock;
+    }
 
-        }
-        
-
-
-    }    
 }
-
 
 void mem_deinit(){
     /*
@@ -209,6 +180,3 @@ Frees up the memory pool that was initially allocated by the mem_init function, 
 free(memory_pool);
 
 }
-
-
-

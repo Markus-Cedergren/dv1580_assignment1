@@ -19,8 +19,8 @@ struct metadata* findFreeBlock(struct metadata* block, size_t size);
 struct metadata {
     size_t size_of_block;
     int free; //1 == True, 0 == False
-    struct metadata* pos_next_block;
     int id;
+    size_t offset;
 };
 
 #endif
