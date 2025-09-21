@@ -155,6 +155,30 @@ Changes the size of the memory block, possibly moving it.
             nextBlock->free && 
             nextBlock->size_of_block + blockToResize->size_of_block + sizeof(struct metadata) >= size){
             
+                if(blockToResize->size_of_block + nextBlock->size_of_block + sizeof(struct metadata) >= size + sizeof(struct metadata) + 1){ // merge two blocks, create one additionall block to fill grap
+
+                    size_t blockToResizeSize = blockToResize->size_of_block;
+                    size_t nextBlockSize = nextBlock->size_of_block;
+                    struct metadata* nextBlockNext = nextBlock->pos_next_block;
+
+                    blockToResize->size_of_block = size;
+                    size_t gapSpace = blockToResizeSize + nextBlockSize + sizeof(struct metadata) - size;
+
+                    char* fillBlockAdress = (char*)(blockToResize+1)+blockToResize->size_of_block;
+                    struct metadata* fillBlock = (struct metadata*)fillBlockAdress;
+                    fillBlock->free = 1;
+                    fillBlock->size_of_block = gapSpace;
+
+                    blockToResize->pos_next_block = fillBlock;
+                    fillBlock->pos_next_block = nextBlockNext;
+                    fillBlock->id = getUniqueId();
+
+                    return blockToResize+1;
+
+                }else{ //If no gap i created, only merge blocks
+
+                }
+
 
         }
         else{//use a new block via mem_alloc
