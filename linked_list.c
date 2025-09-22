@@ -42,6 +42,11 @@ void list_insert_before(Node** head, Node* next_node, uint16_t data){
 
     Node* newNode = (Node*)mem_alloc(sizeof(Node));
     newNode->data = data;
+    
+    if(next_node == *head){ //handles the case where the next_node is the first node in the list
+        *head = newNode;
+        newNode->next = next_node;
+    }
 
     Node* currentNode = *head;
     while(currentNode->next != next_node){
@@ -150,11 +155,17 @@ void list_display_range(Node** head, Node* start_node, Node* end_node){
     
     }
 
+    else if(start_node == end_node){
+        printf("[%d]", start_node->data);
+    }
     else{ //both start and end are specified.
         Node* currentNode = start_node;
         printf("[%d", currentNode->data);
         currentNode = currentNode->next;
-        while(currentNode->next != end_node->next){
+        while(currentNode != NULL){
+            if(currentNode == end_node){
+                break;
+            }
             printf(", %d", currentNode->data);
             currentNode = currentNode->next;
         }
